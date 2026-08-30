@@ -1,0 +1,66 @@
+name: Validate and Enable Show More
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-show-more.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install dependencies
+        run: npm install
+      - name: Apply Show More patch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('src/main.jsx')
+          text = path.read_text()
+          if 'visibleCount' in text:
+              print('Show More is already enabled')
+              raise SystemExit(0)
+          old_state = "const [people, setPeople] = useState(4), [budget, setBudget] = useState(2000)"
+          new_state = "const [visibleCount, setVisibleCount] = useState(6), [people, setPeople] = useState(4), [budget, setBudget] = useState(2000)"
+          if old_state not in text:
+              raise SystemExit('Expected state declaration not found')
+          text = text.replace(old_state, new_state, 1)
+          old_results = "  const best = results[0]\n"
+          new_results = "  useEffect(() => { setVisibleCount(6) }, [ingredients, budget, people, filter, budgetOnly])\n  const best = results[0]\n"
+          if old_results not in text:
+              raise SystemExit('Expected results declaration not found')
+          text = text.replace(old_results, new_results, 1)
+          old_grid = "<div className=\"recipe-grid\">{results.slice(1, 7).map(meal =>"
+          new_grid = "<div className=\"recipe-grid\">{results.slice(1, visibleCount + 1).map(meal =>"
+          if old_grid not in text:
+              raise SystemExit('Expected recipe grid not found')
+          text = text.replace(old_grid, new_grid, 1)
+          old_end = "</div></>}\n    </section><footer>"
+          new_end = "</div>{results.length > visibleCount && <div className=\"show-more-wrap\"><button className=\"primary show-more\" onClick={() => setVisibleCount(value => Math.min(value + 6, results.length))}>Show more meals ↓</button><small>Showing {Math.min(visibleCount, results.length - 1)} of {results.length - 1} additional meals</small></div>}{visibleCount > 6 && <div className=\"show-more-wrap\"><button className=\"secondary show-less\" onClick={() => setVisibleCount(6)}>Show fewer meals ↑</button></div>}</>}\n    </section><footer>"
+          if old_end not in text:
+              raise SystemExit('Expected recipe grid closing marker not found')
+          text = text.replace(old_end, new_end, 1)
+          path.write_text(text)
+          PY
+      - name: Add professional Show More styling
+        run: |
+          cat >> src/styles.css <<'CSS'
+
+.show-more-wrap{display:flex;flex-direction:column;align-items:center;gap:10px;margin:32px 0 12px}.show-more-wrap small{color:#777}.show-more{min-width:210px}.show-less{min-width:190px}
+CSS
+      - name: Build validation
+        run: npm run build
+      - name: Commit validated change
+        run: |
+          if git diff --quiet; then
+            echo 'No changes required'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/main.jsx src/styles.css
+          git commit -m 'fix: enable working show more recipe results'
+          git push
