@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 
 export default function ShoppingAssistant({ items, onToggle, onRemove, onClearPurchased, onClose }) {
   const remaining = items.filter(item => !item.purchased)
