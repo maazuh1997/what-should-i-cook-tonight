@@ -27,29 +27,6 @@ jobs:
           node-version: 24
       - name: Install dependencies
         run: npm install
-      - name: Enable expandable recipe results
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('src/main.jsx')
-          text = path.read_text()
-          if 'visibleCount' not in text:
-              text = text.replace("const [people, setPeople] = useState(4), [budget, setBudget] = useState(2000)", "const [visibleCount, setVisibleCount] = useState(6), [people, setPeople] = useState(4), [budget, setBudget] = useState(2000)", 1)
-              text = text.replace("  const best = results[0]\n", "  useEffect(() => { setVisibleCount(6) }, [ingredients, budget, people, filter, budgetOnly])\n  const best = results[0]\n", 1)
-              text = text.replace("<div className=\"recipe-grid\">{results.slice(1, 7).map(meal =>", "<div className=\"recipe-grid\">{results.slice(1, visibleCount + 1).map(meal =>", 1)
-              marker = "</div></>}\n    </section><footer>"
-              replacement = "</div>{results.length > visibleCount && <div className=\"show-more-wrap\"><button className=\"primary show-more\" onClick={() => setVisibleCount(value => Math.min(value + 6, results.length))}>Show more meals ↓</button><small>Showing {Math.min(visibleCount, results.length - 1)} of {results.length - 1} additional meals</small></div>}{visibleCount > 6 && <div className=\"show-more-wrap\"><button className=\"secondary show-less\" onClick={() => setVisibleCount(6)}>Show fewer meals ↑</button></div>}</>}\n    </section><footer>"
-              if marker not in text:
-                  raise SystemExit('Recipe grid marker not found')
-              text = text.replace(marker, replacement, 1)
-              path.write_text(text)
-          PY
-      - name: Add Show More styling
-        run: |
-          cat >> src/styles.css <<'CSS'
-
-.show-more-wrap{display:flex;flex-direction:column;align-items:center;gap:10px;margin:32px 0 12px}.show-more-wrap small{color:#777}.show-more{min-width:210px}.show-less{min-width:190px}
-CSS
       - name: Build
         run: npm run build
       - name: Configure Pages
