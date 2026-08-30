@@ -1,0 +1,37 @@
+name: Professional Recipe UI Upgrade
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/professional-ui.yml'
+permissions:
+  contents: write
+jobs:
+  upgrade:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Upgrade recipe browsing
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/main.jsx')
+          s = p.read_text()
+          if 'const [visibleCount, setVisibleCount]' not in s:
+              s = s.replace("const [people, setPeople] = useState(4),", "const [visibleCount, setVisibleCount] = useState(6), [people, setPeople] = useState(4),")
+              s = s.replace("  const best = results[0]\n", "  useEffect(() => { setVisibleCount(6) }, [ingredients, budget, people, filter, budgetOnly])\n  const best = results[0]\n")
+              s = s.replace("{results.slice(1, 7).map(meal =>", "{results.slice(1, visibleCount + 1).map(meal =>")
+              old = "</div></>)}\n    </section><footer>"
+              new = "</div>{results.length > visibleCount && <div className=\"show-more-wrap\"><button className=\"show-more\" onClick={() => setVisibleCount(value => Math.min(value + 6, results.length))}>Show more meals <span>↓</span></button><small>Showing {Math.min(visibleCount, results.length - 1)} of {results.length - 1} additional meals</small></div>}{visibleCount > 6 && results.length > 7 && <div className=\"show-more-wrap\"><button className=\"show-less\" onClick={() => setVisibleCount(6)}>Show fewer meals ↑</button></div>}</>}\n    </section><footer>"
+              if old not in s:
+                  raise SystemExit('Expected recipe grid marker was not found')
+              s = s.replace(old, new, 1)
+              p.write_text(s)
+          PY
+      - name: Commit upgrade
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/main.jsx
+          git diff --cached --quiet || git commit -m "feat: add show more recipe browsing"
+          git push
