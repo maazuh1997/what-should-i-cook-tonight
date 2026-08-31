@@ -35,16 +35,18 @@ function App() {
   const [favorites, setFavorites] = useState(() => { try { return JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]') } catch { return [] } })
   const [favoritesOpen, setFavoritesOpen] = useState(false)
   const [surpriseOpen, setSurpriseOpen] = useState(false)
-  const [surpriseSeed, setSurpriseSeed] = useState(0)
+  const [surpriseIndex, setSurpriseIndex] = useState(-1)
   const [shoppingItems, setShoppingItems] = useState(() => { try { return JSON.parse(localStorage.getItem(SHOPPING_KEY) || '[]') } catch { return [] } })
   const [shoppingOpen, setShoppingOpen] = useState(false)
   useEffect(() => { localStorage.setItem(SHOPPING_KEY, JSON.stringify(shoppingItems)) }, [shoppingItems])
   useEffect(() => { localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites)) }, [favorites])
+  useEffect(() => { setSurpriseIndex(-1) }, [preference, timeLimit, sortBy, ingredients])
   useEffect(() => { let active = true; setLoading(true); setError(''); getMeals(ingredients).then(data => { if (!active) return; setMeals(data); setVisibleCount(6); setLoading(false); if (!data.length) setError('No recipes found. Try adding another ingredient.') }).catch(error => { if (!active) return; setMeals([]); setError(error.message || 'Unable to load recipes right now.'); setLoading(false) }); return () => { active = false } }, [ingredients])
   const scoredResults = useMemo(() => meals.map(meal => scoreOf(meal, ingredients, budget, people)), [meals, ingredients, budget, people])
   const results = useMemo(() => { let filtered = scoredResults; if (preference === 'vegetarian') filtered = filtered.filter(meal => meal.vegetarian); if (preference === 'budget') filtered = filtered.filter(meal => !meal.overBudget); if (timeLimit !== 'all') filtered = filtered.filter(meal => meal.minutes <= Number(timeLimit)); return [...filtered].sort((a, b) => { if (sortBy === 'cost') return a.shoppingCost - b.shoppingCost || b.score - a.score; if (sortBy === 'ingredients') return b.ingredientScore - a.ingredientScore || b.score - a.score; if (sortBy === 'time') return a.minutes - b.minutes || b.score - a.score; return b.score - a.score }) }, [scoredResults, preference, timeLimit, sortBy])
   const best = results[0]
-  const surpriseMeal = useMemo(() => { if (!results.length) return null; const pool = results.slice(0, Math.min(results.length, 12)); return pool[surpriseSeed % pool.length] }, [results, surpriseSeed])
+  const surprisePool = useMemo(() => results.slice(0, Math.min(results.length, 12)), [results])
+  const surpriseMeal = surprisePool.length ? surprisePool[Math.max(0, Math.min(surpriseIndex, surprisePool.length - 1))] : null
   const favoriteIds = useMemo(() => new Set(favorites.map(item => item.idMeal)), [favorites])
   const addIngredient = value => { const clean = value.trim(); if (!clean || ingredients.some(item => canonical(item) === canonical(clean))) return; setIngredients(items => [...items, clean]); setInput('') }
   const toggleFavorite = meal => { setFavorites(current => current.some(item => item.idMeal === meal.idMeal) ? current.filter(item => item.idMeal !== meal.idMeal) : [...current, { ...meal }] ) }
@@ -57,7 +59,7 @@ function App() {
   const setSort = value => { setSortBy(value); setVisibleCount(6) }
   const openFavorite = meal => { setRecipe(meal); setFavoritesOpen(false) }
   const alternativeMeals = useMemo(() => { if (!recipe) return []; return scoredResults.filter(meal => meal.idMeal !== recipe.idMeal).map(meal => ({ ...meal, alternativeType: meal.shoppingCost < recipe.shoppingCost ? 'Cheaper' : meal.minutes < recipe.minutes ? 'Faster' : meal.ingredientScore > recipe.ingredientScore ? 'Better match' : meal.vegetarian && !recipe.vegetarian ? 'Vegetarian' : 'Alternative' })).sort((a, b) => { const rank = { 'Cheaper': 0, 'Faster': 1, 'Better match': 2, 'Vegetarian': 3, 'Alternative': 4 }; return (rank[a.alternativeType] ?? 5) - (rank[b.alternativeType] ?? 5) || b.score - a.score }).slice(0, 4) }, [recipe, scoredResults])
-  const surprise = () => { if (!results.length) return; setSurpriseSeed(seed => seed + 1); setSurpriseOpen(true) }
+  const surprise = () => { if (!results.length) return; setSurpriseIndex(index => { const next = index < 0 ? 0 : (index + 1) % Math.min(results.length, 12); return next }); setSurpriseOpen(true) }
   return <main className="app">
     <nav className="nav"><div className="brand">🍳 CookTonight</div><div className="nav-link">Your ingredients · Your budget · Your meal</div><div className="nav-actions"><button className="surprise-button" onClick={surprise}>🎲 Surprise Me</button><button className="favorites-button" onClick={() => setFavoritesOpen(true)}>♥ Saved {favorites.length > 0 && <b>{favorites.length}</b>}</button><button className="shopping-button" onClick={() => setShoppingOpen(true)}>🛒 Shopping {shoppingItems.filter(item => !item.purchased).length > 0 && <b>{shoppingItems.filter(item => !item.purchased).length}</b>}</button></div></nav>
     <section className="hero"><div><span className="eyebrow">LESS THINKING · BETTER MEALS</span><h1>What should I<br /><em>cook tonight?</em></h1><p>Tell us what you have, how many people you're feeding and what you can spend. We'll find meals that make sense.</p></div><div className="pan">🍳</div></section>
