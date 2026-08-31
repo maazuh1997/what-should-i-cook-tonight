@@ -1,0 +1,37 @@
+name: Apply Surprise Me Feature
+on:
+  push:
+    paths:
+      - '.github/workflows/add-surprise-me.yml'
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply feature
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('src/App.jsx')
+          text = path.read_text()
+          text = text.replace("  const [favoritesOpen, setFavoritesOpen] = useState(false)", "  const [favoritesOpen, setFavoritesOpen] = useState(false)\n  const [surpriseOpen, setSurpriseOpen] = useState(false)")
+          text = text.replace("  const best = results[0]", "  const best = results[0]\n  const surpriseMeal = useMemo(() => { if (!results.length) return null; const pool = results.slice(0, Math.min(results.length, 12)); return pool[Math.floor(Math.random() * pool.length)] }, [results, surpriseOpen])")
+          text = text.replace("  const openFavorite = meal => { setRecipe(meal); setFavoritesOpen(false) }", "  const openFavorite = meal => { setRecipe(meal); setFavoritesOpen(false) }\n  const surprise = () => { if (!results.length) return; setSurpriseOpen(true) }")
+          text = text.replace('<button className="favorites-button" onClick={() => setFavoritesOpen(true)}>♥ Saved', '<button className="surprise-button" onClick={surprise}>🎲 Surprise Me</button><button className="favorites-button" onClick={() => setFavoritesOpen(true)}>♥ Saved')
+          marker = "    {favoritesOpen && <div className=\"modal-backdrop\""
+          modal = '''    {surpriseOpen && surpriseMeal && <div className="modal-backdrop" role="dialog" aria-modal="true" onClick={() => setSurpriseOpen(false)}><article className="surprise-modal" onClick={event => event.stopPropagation()} style={{ maxWidth: 760, width: 'calc(100% - 32px)', background: '#fff', borderRadius: 28, overflow: 'hidden', boxShadow: '0 30px 90px rgba(0,0,0,.22)' }}><div style={{ position: 'relative' }}><img src={surpriseMeal.strMealThumb} alt={surpriseMeal.strMeal} style={{ width: '100%', height: 300, objectFit: 'cover', display: 'block' }} /><button className="close" onClick={() => setSurpriseOpen(false)}>×</button></div><div style={{ padding: 32 }}><span className="eyebrow">YOUR MATCH · RANDOMLY PICKED</span><h2 style={{ margin: '8px 0 10px' }}>{surpriseMeal.strMeal}</h2><p style={{ margin: '0 0 18px', color: '#666' }}>{surpriseMeal.strArea || 'International'} cuisine · {surpriseMeal.minutes} min · {surpriseMeal.score}% match</p><div className="ingredient-row">{surpriseMeal.matched.slice(0, 7).map(item => <span className="have" key={`${item.name}-${item.measure}`}>✓ {item.name}</span>)}</div>{surpriseMeal.missing.length > 0 && <div className="missing">Need to buy: {surpriseMeal.missing.slice(0, 6).map(item => item.name).join(' · ')}</div>}<div className="action-row" style={{ marginTop: 22 }}><button className="primary" onClick={() => { setSurpriseOpen(false); setRecipe(surpriseMeal) }}>Cook this meal</button><button className="secondary" onClick={surprise}>🎲 Try another</button><button className={`favorite-action ${favoriteIds.has(surpriseMeal.idMeal) ? 'saved' : ''}`} onClick={() => toggleFavorite(surpriseMeal)}>{favoriteIds.has(surpriseMeal.idMeal) ? '♥ Saved' : '♡ Save meal'}</button></div></div></article></div>}\n'''
+          if marker not in text:
+              raise SystemExit('favorites modal marker not found')
+          text = text.replace(marker, modal + marker, 1)
+          path.write_text(text)
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/App.jsx
+          git commit -m 'feat: add surprise me meal picker' || true
+          git push
+          git rm .github/workflows/add-surprise-me.yml
+          git commit -m 'chore: remove temporary feature workflow' || true
+          git push
