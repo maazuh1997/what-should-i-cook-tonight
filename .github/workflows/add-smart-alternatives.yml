@@ -1,0 +1,33 @@
+name: Apply Smart Alternatives
+on:
+  push:
+    paths:
+      - '.github/workflows/add-smart-alternatives.yml'
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply feature
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('src/App.jsx')
+          s=p.read_text()
+          s=s.replace("  const openFavorite = meal => { setRecipe(meal); setFavoritesOpen(false) }", "  const openFavorite = meal => { setRecipe(meal); setFavoritesOpen(false) }\n  const alternativeMeals = useMemo(() => { if (!recipe) return []; return scoredResults.filter(meal => meal.idMeal !== recipe.idMeal).map(meal => ({ ...meal, alternativeType: meal.shoppingCost < recipe.shoppingCost ? 'Cheaper' : meal.minutes < recipe.minutes ? 'Faster' : meal.ingredientScore > recipe.ingredientScore ? 'Better match' : meal.vegetarian && !recipe.vegetarian ? 'Vegetarian' : 'Alternative' })).sort((a, b) => { const rank = { 'Cheaper': 0, 'Faster': 1, 'Better match': 2, 'Vegetarian': 3, 'Alternative': 4 }; return (rank[a.alternativeType] ?? 5) - (rank[b.alternativeType] ?? 5) || b.score - a.score }).slice(0, 4) }, [recipe, scoredResults])")
+          marker='<h4>Ingredients</h4>'
+          block='''<div style={{ marginTop: 28 }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end', gap: 16, marginBottom: 14 }}><div><span className="eyebrow">SMART ALTERNATIVES</span><h4 style={{ margin: '5px 0 0' }}>Want a different option?</h4></div><span style={{ color: '#777', fontSize: 13 }}>{alternativeMeals.length} options</span></div>{alternativeMeals.length > 0 && <div className="recipe-grid">{alternativeMeals.map(meal => <article className="recipe-card" key={`alt-${meal.idMeal}`} onClick={() => setRecipe(meal)}><div className="recipe-top"><img className="recipe-image" src={meal.strMealThumb} alt={meal.strMeal} loading="lazy" /><span className="score">{meal.alternativeType}</span><button className={`card-favorite ${favoriteIds.has(meal.idMeal) ? 'saved' : ''}`} aria-label={favoriteIds.has(meal.idMeal) ? `Remove ${meal.strMeal} from saved meals` : `Save ${meal.strMeal}`} onClick={event => { event.stopPropagation(); toggleFavorite(meal) }}>{favoriteIds.has(meal.idMeal) ? '♥' : '♡'}</button></div><h3>{meal.strMeal}</h3><div className="recipe-meta">{meal.minutes} min · Shop Rs. {meal.shoppingCost.toLocaleString()} · {meal.ingredientScore}% ingredients</div><div className="missing-list">{meal.alternativeType === 'Cheaper' ? `Save vs current: Rs. ${Math.max(0, recipe.shoppingCost - meal.shoppingCost).toLocaleString()}` : meal.alternativeType === 'Faster' ? `Save time: ${Math.max(0, recipe.minutes - meal.minutes)} min` : meal.alternativeType === 'Better match' ? `More of your ingredients: +${Math.max(0, meal.ingredientScore - recipe.ingredientScore)}%` : meal.missing.length ? `Buy: ${meal.missing.slice(0, 3).map(item => item.name).join(', ')}` : '✓ You have the key ingredients.'}</div></article>)}</div>}</div>\n'''
+          if marker not in s: raise SystemExit('marker not found')
+          s=s.replace(marker, block+marker, 1)
+          p.write_text(s)
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/App.jsx
+          git commit -m 'feat: add smart recipe alternatives' || true
+          git push
+          git rm .github/workflows/add-smart-alternatives.yml
+          git commit -m 'chore: remove temporary smart alternatives workflow' || true
+          git push
